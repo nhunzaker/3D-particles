@@ -1,0 +1,225 @@
+<title>Experiments with color depth canvas</title>
+
+<style>
+  body {
+    background: #111;
+    margin: 0;
+    color: #fff;
+  }
+</style>
+
+<canvas id="Canvas2D" width="600" height="300"></canvas>
+
+<script type="text/javascript">
+  var drag = 0.97;
+  var gravity = 0.1;
+  var lastMouseX = 0;
+
+  function Vector3(x,y,z) {
+    this.x = x;
+    this.y = y;
+    this.z = z;
+
+    this.tx = 0;
+    this.tz = 0;
+    this.cosRY = 0;
+    this.sinRY = 0;
+
+    this.rotateY = function(angle) {
+      this.tx = this.x;
+      this.tz = this.z;
+
+      cosRY = Math.cos(angle);
+      sinRY = Math.sin(angle);
+
+      this.x= (this.tx*cosRY)+(this.tz*sinRY);
+      this.z= (this.tx*-sinRY)+(this.tz*cosRY);
+    }
+
+    this.reset = function(x,y,z) {
+      this.x = x;
+      this.y = y;
+      this.z = z;
+    }
+
+    this.plusEq = function (v) {
+      this.x += v.x;
+      this.y += v.y;
+      this.z += v.z;
+    }
+
+    this.multiplyEq = function (s) {
+      this.x*=s;
+      this.y*=s;
+      this.z*=s;
+    }
+
+  }
+
+  function Particle() {
+    this.pos = new Vector3(0,0,0);
+    this.vel = new Vector3(0,0,0);
+    this.enabled = true;
+
+    this.reset = function() {
+      this.pos.reset(0, -200, 0);
+      this.vel.reset((Math.random()*20)-10, Math.random()*-5, (Math.random()*20)-10);
+      this.enabled = true;
+    }
+
+    this.reset();
+
+    this.update = function() {
+      if (this.enabled) {
+        this.pos.plusEq(this.vel);
+        this.vel.multiplyEq(drag);
+
+        this.vel.y+=gravity;
+      }
+    }
+  }
+
+  var fov = 250;
+
+  var canvas = document.getElementById('Canvas2D');
+  var c = canvas.getContext('2d');
+
+  var SCREEN_WIDTH = document.body.offsetWidth
+  var SCREEN_HEIGHT = document.body.offsetHeight
+
+  canvas.width = SCREEN_WIDTH * window.devicePixelRatio;
+  canvas.height = SCREEN_HEIGHT * window.devicePixelRatio;
+
+  canvas.style.width = SCREEN_WIDTH
+  canvas.style.height = SCREEN_HEIGHT
+
+  c.scale(window.devicePixelRatio, window.devicePixelRatio)
+
+    var HALF_WIDTH = SCREEN_WIDTH / 2;
+  var HALF_HEIGHT = SCREEN_HEIGHT / 2;
+
+  var mouseX = 0;
+  var mouseY = -200;
+
+  window.addEventListener('resize', function() {
+    requestAnimationFrame(function() {
+      SCREEN_WIDTH = window.innerWidth
+      SCREEN_HEIGHT = window.innerHeight
+
+      canvas.width = SCREEN_WIDTH * window.devicePixelRatio;
+      canvas.height = SCREEN_HEIGHT * window.devicePixelRatio;
+
+      canvas.style.width = SCREEN_WIDTH
+      canvas.style.height = SCREEN_HEIGHT
+
+      HALF_WIDTH = SCREEN_WIDTH / 2;
+      HALF_HEIGHT = SCREEN_HEIGHT / 2;
+
+      c.scale(window.devicePixelRatio, window.devicePixelRatio)
+    })
+  })
+
+    var isMouseDown = false;
+  var lights = [
+    new Vector3(0, -200, 0),
+    new Vector3(0, 100, -100)
+  ]
+
+  function draw3Din2D(point, color) {
+    x3d = point.x;
+    y3d = point.y;
+    z3d = point.z;
+
+    var scale = fov / (fov + z3d);
+    var x2d = (x3d * scale) + HALF_WIDTH;
+    var y2d = (y3d * scale) + HALF_HEIGHT;
+
+    c.fillStyle = color || 'hsl(' + [
+      Date.now() / 80 % 360,
+      Math.max(10, (30 * scale)) + '%',
+      Math.min(50, Math.max(10, (20 * scale))) + '%'
+    ] + ')'
+
+    scale *= 4;
+
+    c.beginPath()
+
+      if (scale > 0) {
+        c.arc(x2d - scale, y2d - scale, scale, 0, Math.PI * 2);
+      }
+
+    c.closePath()
+      c.fill()
+  }
+
+  canvas.onmousedown = function(a) {
+    isMouseDown=true;
+    lastMouseX = mouseX;
+  }
+
+  document.onmouseup = function(a) {
+    isMouseDown=false;
+  }
+
+  document.onmousemove = updateMouse;
+
+  var particles = [];
+  var spareParticles = [];
+
+  function render() {
+    var particle;
+    if (!isMouseDown) {
+      for (var i = 0; i < 4; i++) {
+        if (spareParticles.length==0) {
+          particle = new Particle();
+          particles.push(particle);
+        } else {
+          particle = spareParticles.shift();
+          particle.reset();
+        }
+      }
+    }
+
+    c.save()
+      c.clearRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+
+      particles.sort(compareZPos);
+
+    for (i=0; i < particles.length; i++) {
+      particle = particles[i];
+
+      if (!isMouseDown) {
+        particle.update();
+
+        if (particle.enabled && (particle.pos.y > 250)) {
+          particle.enabled = false;
+          spareParticles.push(particle);
+        }
+      } else {
+        particle.pos.rotateY( (lastMouseX - mouseX) * 0.01);
+        particle.vel.rotateY( (lastMouseX - mouseX) * 0.01);
+      }
+
+      if (particle.enabled) {
+        draw3Din2D(particle.pos);
+      }
+
+    }
+    lastMouseX= mouseX;
+    c.restore()
+  }
+
+  function compareZPos(a, b){
+    return (b.pos.z - a.pos.z)
+  }
+
+  function updateMouse(e) {
+    mouseX = e.pageX - canvas.offsetLeft - HALF_WIDTH;
+    mouseY = e.pageY - canvas.offsetTop - HALF_HEIGHT;
+  }
+
+  requestAnimationFrame(function loop() {
+    requestAnimationFrame(loop)
+      render()
+  })
+</script>
