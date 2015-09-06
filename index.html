@@ -197,6 +197,7 @@
               particle.enabled = false;
               spareParticles.push(particle);
             }
+            particle.pos.rotateY(0.003);
           } else {
             particle.pos.rotateY( (lastMouseX - mouseX) * 0.01);
             particle.vel.rotateY( (lastMouseX - mouseX) * 0.01);
